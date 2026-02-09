@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>GUIMETRA ERP</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6f8;
+      margin: 0;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      color: #0a3d62;
+    }
+    .box {
+      background: #fff;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    input, button {
+      width: 100%;
+      padding: 10px;
+      margin-top: 10px;
+    }
+    button {
+      background: #0a3d62;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      font-weight: bold;
+    }
+    ul {
+      padding: 0;
+      list-style: none;
+    }
+    li {
+      background: #ecf0f1;
+      margin-bottom: 8px;
+      padding: 10px;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+
+<body>
+
+<h1>GUIMETRA ERP</h1>
+
+<div class="box">
+  <h3>Ajouter un produit</h3>
+  <input id="nom" placeholder="Nom du produit">
+  <input id="quantite" type="number" placeholder="Quantité">
+  <input id="prix" type="number" placeholder="Prix">
+  <button onclick="ajouterProduit()">Enregistrer</button>
+</div>
+
+<div class="box">
+  <h3>Liste des produits</h3>
+  <ul id="liste"></ul>
+</div>
+
+<script>
+  // 🔥 CONFIGURATION FIREBASE (LA TIENNE)
+  const firebaseConfig = {
+    apiKey: "AIzaSyBAax1jy1rqwfvuJWIPmpxAwr",
+    authDomain: "guimetra-erp.firebaseapp.com",
+    projectId: "guimetra-erp",
+    storageBucket: "guimetra-erp.appspot.com",
+    messagingSenderId: "417001237787",
+    appId: "1:417001237787:web:dfb57c949a5a",
+    measurementId: "G-GV7RB1KL2J"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+
+  function ajouterProduit() {
+    const nom = document.getElementById("nom").value;
+    const quantite = document.getElementById("quantite").value;
+    const prix = document.getElementById("prix").value;
+
+    if (!nom || !quantite || !prix) {
+      alert("Remplis tous les champs");
+      return;
+    }
+
+    db.collection("produits").add({
+      nom,
+      quantite,
+      prix,
+      date: new Date()
+    });
+
+    document.getElementById("nom").value = "";
+    document.getElementById("quantite").value = "";
+    document.getElementById("prix").value = "";
+  }
+
+  db.collection("produits").orderBy("date", "desc")
+    .onSnapshot(snapshot => {
+      const liste = document.getElementById("liste");
+      liste.innerHTML = "";
+      snapshot.forEach(doc => {
+        const p = doc.data();
+        liste.innerHTML += `<li>${p.nom} — ${p.quantite} — ${p.prix} GNF</li>`;
+      });
+    });
+</script>
+
+</body>
+</html>
