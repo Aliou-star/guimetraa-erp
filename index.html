@@ -1,608 +1,347 @@
-<!doctype html>
-<html lang="fr">
-<head>
-  <meta charset="utf-8" />
-  <title>GUIMETRA — ERP Pro (Firebase) — Connexion requise</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <script src="https://kit.fontawesome.com/4f6b1f1d8b.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  LayoutDashboard, Package, Users, FileText, Settings, 
+  Search, Bell, Moon, Sun, Plus, Trash2, Edit, 
+  Printer, Send, MessageSquare, Menu, X, Save,
+  ChevronRight, ArrowLeft
+} from 'lucide-react';
 
-  <!-- Firebase compat -->
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+// --- FIREBASE INITIALIZATION ---
+import { initializeApp } from 'firebase/app';
+import { 
+  getAuth, 
+  signInAnonymously, 
+  onAuthStateChanged,
+  signInWithCustomToken 
+} from 'firebase/auth';
+import { 
+  getFirestore, 
+  collection, 
+  addDoc, 
+  onSnapshot, 
+  doc, 
+  updateDoc, 
+  deleteDoc, 
+  serverTimestamp 
+} from 'firebase/firestore';
 
-  <style>
-    :root{--primary:#0b63a5;--accent:#e63946;--bg:#f3f7fb;--muted:#6b7280}
-    body{font-family:Inter,system-ui,Arial;background:linear-gradient(180deg,#f3f7fb,#eef6fb);color:#0f172a;margin:0}
-    header{background:linear-gradient(90deg,var(--primary),#0a597a);color:#fff;padding:18px 24px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 8px 30px rgba(11,99,165,0.12)}
-    .brand{font-weight:800;font-size:18px}
-    .brand small{color:var(--accent);font-weight:800;margin-left:8px}
-    nav{display:flex;gap:8px;padding:12px;background:#fff;border-bottom:1px solid #eef3f8;flex-wrap:wrap}
-    .nav-btn{border-radius:8px;padding:8px 12px;border:1px solid transparent;background:transparent;color:var(--primary);cursor:pointer}
-    .nav-btn.active{background:linear-gradient(90deg,#f0f6fb,#eaf6ff)}
-    main{max-width:1200px;margin:18px auto;padding:16px}
-    .card-ghost{background:#fff;border-radius:12px;padding:14px;box-shadow:0 8px 30px rgba(12,20,30,0.06)}
-    .metric{display:flex;justify-content:space-between;align-items:center;padding:14px;border-radius:10px;background:linear-gradient(180deg,#fff,#fbfdff)}
-    .muted{color:var(--muted)}
-    .prod-thumb{width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid #eee}
-    #toast{position:fixed;right:18px;bottom:18px;z-index:9999}
-    .toast-card{padding:10px;border-radius:8px;color:#fff}
-    @media(max-width:880px){ nav{overflow:auto} }
-    .small-muted{font-size:13px;color:var(--muted)}
-  </style>
-</head>
-<body>
-  <header>
-    <div>
-      <div class="brand">GUIMETRA <small>CONSTRUCTION</small></div>
-      <div class="small-muted">ERP • Devis • Stocks — Cloud (Firebase)</div>
-    </div>
-    <div style="display:flex;gap:12px;align-items:center">
-      <div id="userBox" class="small-muted"></div>
-      <button id="signOutBtn" class="btn btn-sm btn-outline-light" style="display:none"><i class="fa fa-sign-out-alt"></i> Déconnexion</button>
-    </div>
-  </header>
+const firebaseConfig = {
+  apiKey: "AIzaSyAC8FPE55zBg06Tjj-AE1DM6QohfAjmGHI",
+  authDomain: "gestion-stock-pro-696af.firebaseapp.com",
+  projectId: "gestion-stock-pro-696af",
+  storageBucket: "gestion-stock-pro-696af.firebasestorage.app",
+  messagingSenderId: "100191592139",
+  appId: "1:100191592139:web:3e764a85f58e11b9cdc54e"
+};
 
-  <nav>
-    <button class="nav-btn active" data-target="dashboard">Tableau de bord</button>
-    <button class="nav-btn" data-target="produits">Produits</button>
-    <button class="nav-btn" data-target="clients">Clients</button>
-    <button class="nav-btn" data-target="devis">Devis</button>
-    <button class="nav-btn" data-target="convertisseur">Convertisseur</button>
-    <button class="nav-btn" data-target="settings">Paramètres</button>
-  </nav>
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'guimetra-erp-mobile';
 
-  <main>
-    <div id="authMessage" class="mb-3 card-ghost" style="display:none">
-      <div class="small-muted">Tu dois te connecter pour utiliser l'application. Clique sur "Se connecter" (bouton en haut).</div>
-    </div>
+// --- REUSABLE UI COMPONENTS (Mobile Optimized) ---
 
-    <!-- DASHBOARD -->
-    <section id="dashboard" class="card-ghost mb-3" style="display:none">
-      <div class="d-flex gap-3 mb-3" style="flex-wrap:wrap">
-        <div class="metric" style="flex:1">
-          <div><div class="muted">Produits</div><div id="stat_prod" class="fs-4 fw-bold">0</div></div>
-          <div><i class="fa fa-box fa-2x" style="color:var(--primary)"></i></div>
-        </div>
-        <div class="metric" style="flex:1">
-          <div><div class="muted">Clients</div><div id="stat_clients" class="fs-4 fw-bold">0</div></div>
-          <div><i class="fa fa-users fa-2x" style="color:#2d6a4f"></i></div>
-        </div>
-        <div class="metric" style="flex:1">
-          <div><div class="muted">Total devis (GNF)</div><div id="stat_devis" class="fs-4 fw-bold">0</div></div>
-          <div><i class="fa fa-file-invoice-dollar fa-2x" style="color:var(--accent)"></i></div>
-        </div>
-      </div>
+const Card = ({ children, className = "", onClick }) => (
+  <div 
+    onClick={onClick}
+    className={`bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-5 ${className} ${onClick ? 'active:scale-95 transition-transform' : ''}`}
+  >
+    {children}
+  </div>
+);
 
-      <div class="d-flex gap-3" style="flex-wrap:wrap">
-        <div class="card-ghost p-3" style="flex:1;min-width:320px">
-          <h6>Chiffre d'affaires par mois</h6>
-          <canvas id="chartCA" height="100"></canvas>
-        </div>
-        <div class="card-ghost p-3" style="width:340px">
-          <h6>Top produits (ventes)</h6>
-          <canvas id="chartTop" height="100"></canvas>
-          <div id="lowStockArea" class="mt-2 small-muted"></div>
-        </div>
-      </div>
-    </section>
+const Badge = ({ children, color = "blue" }) => {
+  const colors = {
+    blue: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
+    green: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
+    red: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
+    orange: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
+  };
+  return (
+    <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${colors[color]}`}>
+      {children}
+    </span>
+  );
+};
 
-    <!-- PRODUITS -->
-    <section id="produits" class="card-ghost mb-3" style="display:none">
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <h5>Produits</h5>
-        <div class="d-flex gap-2 align-items-center">
-          <input id="searchProd" class="form-control form-control-sm" placeholder="Rechercher..." oninput="renderProducts()" style="min-width:200px">
-          <button class="btn btn-primary" onclick="openProductModal()">+ Ajouter produit</button>
-        </div>
-      </div>
-      <div style="overflow:auto"><table class="table"><thead><tr><th></th><th>Nom</th><th>Type</th><th>Achat</th><th>Vente</th><th>Qte</th><th></th></tr></thead><tbody id="tblProducts"></tbody></table></div>
-    </section>
+const Button = ({ children, onClick, variant = "primary", icon: Icon, className = "", fullWidth = false }) => {
+  const variants = {
+    primary: "bg-blue-600 text-white shadow-md active:bg-blue-700",
+    secondary: "bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200 active:bg-slate-200",
+    danger: "bg-red-50 text-red-600 active:bg-red-100",
+    outline: "border-2 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
+  };
 
-    <!-- CLIENTS -->
-    <section id="clients" class="card-ghost mb-3" style="display:none">
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <h5>Clients</h5>
-        <button class="btn btn-primary" onclick="openClientModal()">+ Ajouter client</button>
-      </div>
-      <div style="overflow:auto"><table class="table"><thead><tr><th>Nom</th><th>Téléphone</th><th>Adresse</th><th></th></tr></thead><tbody id="tblClients"></tbody></table></div>
-    </section>
+  return (
+    <button 
+      onClick={onClick} 
+      className={`flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-bold transition-all ${fullWidth ? 'w-full' : ''} ${variants[variant]} ${className}`}
+    >
+      {Icon && <Icon size={20} />}
+      {children}
+    </button>
+  );
+};
 
-    <!-- DEVIS -->
-    <section id="devis" class="card-ghost mb-3" style="display:none">
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <h5>Devis</h5>
-        <div class="d-flex gap-2">
-          <button class="btn btn-outline-secondary" onclick="exportQuotesCSV()">Exporter CSV</button>
-          <button class="btn btn-primary" onclick="addQuoteLine()">+ Ligne</button>
-          <button class="btn btn-success" onclick="saveQuote()">Enregistrer Devis</button>
-        </div>
-      </div>
+// --- MAIN APPLICATION ---
 
-      <div class="row g-2 mb-2">
-        <div class="col-md-6"><label>Client</label><select id="quote_client" class="form-select"></select></div>
-        <div class="col-md-6"><label>Ref (optionnel)</label><input id="quote_ref" class="form-control"></div>
-      </div>
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [accessCode, setAccessCode] = useState("");
+  const [activeTab, setActiveTab] = useState("dashboard");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [products, setProducts] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [quotes, setQuotes] = useState([]);
+  const [darkMode, setDarkMode] = useState(false);
 
-      <div id="quote_lines"></div>
-      <div class="card-ghost mt-3">
-        <div id="quote_preview_content" class="small-muted"></div>
-        <div class="d-flex justify-content-between align-items-center mt-2">
-          <div>Total : <b id="quote_total">0</b> GNF</div>
-          <div><button class="btn btn-outline-secondary" onclick="previewPDF()">Aperçu / PDF</button></div>
-        </div>
-      </div>
-    </section>
+  const ADMIN_CODE = "Aliouguimetra224";
 
-    <!-- Convertisseur -->
-    <section id="convertisseur" class="card-ghost mb-3" style="display:none">
-      <h5>Convertisseur</h5>
-      <div class="row g-2">
-        <div class="col-md-4"><input id="conv_amount" class="form-control" placeholder="Montant"></div>
-        <div class="col-md-3"><select id="conv_from" class="form-select"><option>GNF</option><option>USD</option><option>EUR</option><option>XOF</option></select></div>
-        <div class="col-md-3"><select id="conv_to" class="form-select"><option>USD</option><option>EUR</option><option>XOF</option><option>GNF</option></select></div>
-        <div class="col-md-2"><button class="btn btn-primary w-100" onclick="convertCurrency()">Convertir</button></div>
-      </div>
-      <div class="mt-3"><div id="conv_result" class="fs-5">—</div><div class="small-muted">Taux manuel (si besoin)</div><input id="manual_rate" class="form-control" placeholder="Ex: 0.000051"></div>
-    </section>
-
-    <!-- SETTINGS -->
-    <section id="settings" class="card-ghost mb-3" style="display:none">
-      <h5>Paramètres & Sauvegarde</h5>
-      <div class="d-flex gap-2 my-2">
-        <button class="btn btn-outline-secondary" onclick="exportAllJSON()">Exporter JSON</button>
-        <button class="btn btn-outline-secondary" onclick="importJSONPrompt()">Importer JSON</button>
-        <button class="btn btn-outline-danger" onclick="clearAllData()">Vider toutes les données</button>
-      </div>
-      <div class="mt-3 small-muted">Les actions écrivent dans Firestore (produits, clients, devis, conversions, audit_logs).</div>
-    </section>
-  </main>
-
-  <!-- Modals -->
-  <div class="modal fade" id="authModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
-    <div class="modal-header"><h5>Se connecter</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
-    <div class="modal-body">
-      <input id="loginEmail" class="form-control mb-2" placeholder="Email">
-      <input id="loginPassword" type="password" class="form-control mb-2" placeholder="Mot de passe">
-      <div class="d-grid gap-2">
-        <button class="btn btn-primary" onclick="signIn()">Se connecter</button>
-        <button class="btn btn-outline-secondary" onclick="signUp()">Créer un compte</button>
-      </div>
-    </div>
-  </div></div></div>
-
-  <div class="modal fade" id="modalProduct" tabindex="-1"><div class="modal-dialog modal-md modal-dialog-centered"><div class="modal-content">
-    <div class="modal-header"><h5>Produit</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
-    <div class="modal-body">
-      <input id="m_p_id" type="hidden">
-      <label>Nom</label><input id="m_p_nom" class="form-control mb-2">
-      <label>Code / Ref</label><input id="m_p_code" class="form-control mb-2">
-      <label>Type</label><input id="m_p_type" class="form-control mb-2">
-      <label>Dimensions</label><input id="m_p_dim" class="form-control mb-2">
-      <label>Prix d'achat (GNF)</label><input id="m_p_pa" class="form-control mb-2" type="number">
-      <label>Prix de vente (GNF)</label><input id="m_p_prix" class="form-control mb-2" type="number">
-      <label>Quantité</label><input id="m_p_qte" class="form-control mb-2" type="number">
-    </div>
-    <div class="modal-footer"><button class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button><button class="btn btn-primary" onclick="saveProductModal()">Enregistrer</button></div>
-  </div></div></div>
-
-  <div class="modal fade" id="modalClient" tabindex="-1"><div class="modal-dialog modal-md modal-dialog-centered"><div class="modal-content">
-    <div class="modal-header"><h5>Client</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
-    <div class="modal-body">
-      <label>Nom / Raison sociale</label><input id="m_c_nom" class="form-control mb-2">
-      <label>Téléphone</label><input id="m_c_tel" class="form-control mb-2">
-      <label>Adresse</label><input id="m_c_addr" class="form-control mb-2">
-    </div>
-    <div class="modal-footer"><button class="btn btn-outline-secondary" data-bs-dismiss="modal">Annuler</button><button class="btn btn-primary" onclick="saveClientModal()">Enregistrer</button></div>
-  </div></div></div>
-
-  <div id="toast"></div>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
-  <!-- ========== FIREBASE CONFIG ========== -->
-  <script>
-    // === Remplace ci-dessous si tu as une autre config ===
-    const firebaseConfig = {
-      apiKey: "AIzaSyAC8FPE55zBg06Tjj-AE1DM6QohfAjmGHI",
-      authDomain: "gestion-stock-pro-696af.firebaseapp.com",
-      projectId: "gestion-stock-pro-696af",
-      storageBucket: "gestion-stock-pro-696af.firebasestorage.app",
-      messagingSenderId: "100191592139",
-      appId: "1:100191592139:web:3e764a85f58e11b9cdc54e"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
-    const db = firebase.firestore();
-  </script>
-
-  <!-- ========== APP SCRIPT (Firestore-backed, auth required) ========== -->
-  <script>
-    // Small toast helper
-    function toast(msg, type='info', timeout=3000){
-      const container = document.getElementById('toast');
-      const card = document.createElement('div'); card.className='toast-card mb-2';
-      card.style.background = type==='success' ? '#198754' : (type==='error' ? '#dc3545' : '#0b63a5');
-      card.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><div>${msg}</div><div style="margin-left:12px">${type==='success'?'<i class="fa fa-check-circle"></i>':type==='error'?'<i class="fa fa-exclamation-circle"></i>':'<i class="fa fa-info-circle"></i>'}</div></div>`;
-      container.appendChild(card);
-      setTimeout(()=>{ card.style.opacity='0'; setTimeout(()=>card.remove(),400); }, timeout);
-    }
-
-    // UI State
-    let products = [], clients = [], quotes = [], conversions = [], logs = [];
-    let quoteLines = [];
-
-    // Auth functions
-    async function signUp(){
-      const email = document.getElementById('loginEmail').value.trim();
-      const pw = document.getElementById('loginPassword').value;
-      if(!email || !pw){ toast('Email + mot de passe requis','error'); return; }
-      try{ await auth.createUserWithEmailAndPassword(email,pw); toast('Compte créé et connecté','success'); bootstrap.Modal.getInstance(document.getElementById('authModal')).hide(); }catch(e){ toast(e.message,'error'); }
-    }
-    async function signIn(){
-      const email = document.getElementById('loginEmail').value.trim();
-      const pw = document.getElementById('loginPassword').value;
-      if(!email || !pw){ toast('Email + mot de passe requis','error'); return; }
-      try{ await auth.signInWithEmailAndPassword(email,pw); toast('Connecté','success'); bootstrap.Modal.getInstance(document.getElementById('authModal')).hide(); }catch(e){ toast(e.message,'error'); }
-    }
-    async function signOut(){ try{ await auth.signOut(); toast('Déconnecté','info'); }catch(e){ toast(e.message,'error'); } }
-
-    document.getElementById('signOutBtn').addEventListener('click', signOut);
-
-    // Start listeners after auth
-    function startRealtimeListeners(){
-      // produits
-      db.collection('produits').orderBy('nom').onSnapshot(snap=>{
-        products = snap.docs.map(d=>({ id:d.id, ...d.data() }));
-        renderProducts(); renderCharts(); updateStats(); showLowStock();
-      }, err => console.error(err));
-
-      // clients
-      db.collection('clients').orderBy('nom').onSnapshot(snap=>{
-        clients = snap.docs.map(d=>({ id:d.id, ...d.data() }));
-        renderClients(); updateStats();
-      });
-
-      // devis
-      db.collection('devis').orderBy('createdAt','desc').onSnapshot(snap=>{
-        quotes = snap.docs.map(d=>({ id:d.id, ...d.data() }));
-        renderCharts(); updateStats();
-      });
-
-      // audit logs (last 20)
-      db.collection('audit_logs').orderBy('ts','desc').limit(20).onSnapshot(snap=>{
-        logs = snap.docs.map(d=>({ id:d.id, ...d.data() }));
-        renderLogs();
-      });
-    }
-
-    // Log action
-    async function logAction(action, docId=null, details={}){
-      try{ await db.collection('audit_logs').add({ uid: auth.currentUser ? auth.currentUser.uid : null, action, docId, details, ts: firebase.firestore.FieldValue.serverTimestamp() }); }catch(e){ console.error('logAction',e); }
-    }
-
-    // UI renderers
-    function renderProducts(){
-      const t = document.getElementById('tblProducts'); t.innerHTML = '';
-      const q = (document.getElementById('searchProd').value||'').toLowerCase();
-      products.filter(p=> !q || (p.nom||'').toLowerCase().includes(q) || (p.code||'').toLowerCase().includes(q) ).forEach(p=>{
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td><img src="" class="prod-thumb me-2" style="display:none"></td>
-                        <td><b>${escapeHtml(p.nom)}</b><div class="muted">${escapeHtml(p.code||'')}</div></td>
-                        <td>${escapeHtml(p.type||'')}</td>
-                        <td>${(Number(p.prixAchat)||0).toLocaleString()}</td>
-                        <td>${(Number(p.prixVente)||0).toLocaleString()}</td>
-                        <td>${Number(p.quantite)||0}</td>
-                        <td class="text-end">
-                          <button class="btn btn-sm btn-outline-primary me-1" onclick='openProductModal(${JSON.stringify(p).replace(/'/g,"\\'")})'><i class="fa fa-pen"></i></button>
-                          <button class="btn btn-sm btn-outline-danger" onclick="deleteProduit('${p.id}')"><i class="fa fa-trash"></i></button>
-                        </td>`;
-        t.appendChild(tr);
-      });
-    }
-
-    function renderClients(){
-      const t = document.getElementById('tblClients'); t.innerHTML = '';
-      const sel = document.getElementById('quote_client'); if(sel) sel.innerHTML = '<option value="">-- Aucun --</option>';
-      clients.forEach(c=>{
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${escapeHtml(c.nom)}</td><td>${escapeHtml(c.tel||'')}</td><td>${escapeHtml(c.addr||'')}</td><td class="text-end"><button class="btn btn-sm btn-outline-danger" onclick="deleteClient('${c.id}')"><i class="fa fa-trash"></i></button></td>`;
-        t.appendChild(tr);
-        if(sel){ const opt=document.createElement('option'); opt.value=c.id; opt.textContent=c.nom + (c.tel ? ' • ' + c.tel : ''); sel.appendChild(opt); }
-      });
-    }
-
-    // Product CRUD
-    async function openProductModal(prod=null){
-      if(prod){
-        document.getElementById('m_p_id').value = prod.id;
-        document.getElementById('m_p_nom').value = prod.nom || '';
-        document.getElementById('m_p_code').value = prod.code || '';
-        document.getElementById('m_p_type').value = prod.type || '';
-        document.getElementById('m_p_dim').value = prod.dimensions || '';
-        document.getElementById('m_p_pa').value = prod.prixAchat || 0;
-        document.getElementById('m_p_prix').value = prod.prixVente || 0;
-        document.getElementById('m_p_qte').value = prod.quantite || 0;
-      } else {
-        ['m_p_id','m_p_nom','m_p_code','m_p_type','m_p_dim','m_p_pa','m_p_prix','m_p_qte'].forEach(id=>document.getElementById(id).value='');
-      }
-      new bootstrap.Modal(document.getElementById('modalProduct')).show();
-    }
-
-    async function saveProductModal(){
-      const id = document.getElementById('m_p_id').value || null;
-      const payload = {
-        nom: document.getElementById('m_p_nom').value.trim(),
-        code: document.getElementById('m_p_code').value.trim(),
-        type: document.getElementById('m_p_type').value.trim(),
-        dimensions: document.getElementById('m_p_dim').value.trim(),
-        prixAchat: Number(document.getElementById('m_p_pa').value||0),
-        prixVente: Number(document.getElementById('m_p_prix').value||0),
-        quantite: Number(document.getElementById('m_p_qte').value||0),
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        seuil: 5
-      };
-      try{
-        if(!auth.currentUser) return toast('Connecte-toi','error');
-        if(id){
-          await db.collection('produits').doc(id).update(payload);
-          await logAction('update_product', id, payload);
-          toast('Produit mis à jour','success');
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token).catch(() => signInAnonymously(auth));
         } else {
-          payload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
-          const ref = await db.collection('produits').add(payload);
-          await logAction('create_product', ref.id, payload);
-          toast('Produit ajouté','success');
+          await signInAnonymously(auth);
         }
-        bootstrap.Modal.getInstance(document.getElementById('modalProduct')).hide();
-      }catch(e){ console.error(e); toast(e.message,'error'); }
-    }
+      } catch (e) { console.error(e); }
+    };
+    initAuth();
+    return onAuthStateChanged(auth, setUser);
+  }, []);
 
-    async function deleteProduit(id){
-      if(!confirm('Supprimer ce produit ?')) return;
-      try{
-        if(!auth.currentUser) return toast('Connecte-toi','error');
-        await db.collection('produits').doc(id).delete();
-        await logAction('delete_product', id, {});
-        toast('Produit supprimé','success');
-      }catch(e){ console.error(e); toast('Erreur suppression','error'); }
-    }
+  useEffect(() => {
+    if (!user || !isAuthorized) return;
+    const path = (col) => collection(db, 'artifacts', appId, 'public', 'data', col);
+    const u1 = onSnapshot(path('products'), s => setProducts(s.docs.map(d => ({id: d.id, ...d.data()}))));
+    const u2 = onSnapshot(path('clients'), s => setClients(s.docs.map(d => ({id: d.id, ...d.data()}))));
+    const u3 = onSnapshot(path('quotes'), s => setQuotes(s.docs.map(d => ({id: d.id, ...d.data()}))));
+    return () => { u1(); u2(); u3(); };
+  }, [user, isAuthorized]);
 
-    // Clients CRUD
-    function openClientModal(c=null){
-      if(c){ document.getElementById('m_c_nom').value=c.nom||''; document.getElementById('m_c_tel').value=c.tel||''; document.getElementById('m_c_addr').value=c.addr||''; }
-      else { ['m_c_nom','m_c_tel','m_c_addr'].forEach(id=>document.getElementById(id).value=''); }
-      new bootstrap.Modal(document.getElementById('modalClient')).show();
-    }
+  const handleLogin = (e) => {
+    e?.preventDefault();
+    if (accessCode === ADMIN_CODE) setIsAuthorized(true);
+    else alert("Accès refusé");
+  };
 
-    async function saveClientModal(){
-      const doc = { nom: document.getElementById('m_c_nom').value.trim(), tel: document.getElementById('m_c_tel').value.trim(), addr: document.getElementById('m_c_addr').value.trim(), createdAt: firebase.firestore.FieldValue.serverTimestamp() };
-      if(!doc.nom) return toast('Nom requis','error');
-      try{
-        if(!auth.currentUser) return toast('Connecte-toi','error');
-        const ref = await db.collection('clients').add(doc);
-        await logAction('create_client', ref.id, doc);
-        toast('Client ajouté','success');
-        bootstrap.Modal.getInstance(document.getElementById('modalClient')).hide();
-      }catch(e){ console.error(e); toast(e.message,'error'); }
-    }
+  if (!isAuthorized) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6">
+        <div className="w-full max-w-sm space-y-8 text-center">
+          <div className="space-y-2">
+            <h1 className="text-4xl font-black text-white tracking-tighter">GUIMETRA</h1>
+            <p className="text-blue-500 font-bold text-xs uppercase tracking-[0.3em]">Mobile ERP BTP</p>
+          </div>
+          <form onSubmit={handleLogin} className="space-y-4">
+            <input 
+              type="password" 
+              placeholder="Code d'accès"
+              className="w-full bg-slate-900 border-2 border-slate-800 rounded-2xl p-4 text-center text-white text-xl font-bold focus:border-blue-500 outline-none transition-all"
+              value={accessCode}
+              onChange={e => setAccessCode(e.target.value)}
+            />
+            <Button fullWidth onClick={handleLogin}>Se Connecter</Button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
-    async function deleteClient(id){
-      if(!confirm('Supprimer client ?')) return;
-      try{
-        if(!auth.currentUser) return toast('Connecte-toi','error');
-        await db.collection('clients').doc(id).delete();
-        await logAction('delete_client', id, {});
-        toast('Client supprimé','success');
-      }catch(e){ console.error(e); toast('Erreur suppression','error'); }
-    }
+  const NavItem = ({ id, icon: Icon, label }) => (
+    <button 
+      onClick={() => { setActiveTab(id); setSidebarOpen(false); }}
+      className={`w-full flex items-center gap-4 p-4 rounded-2xl font-bold transition-all ${activeTab === id ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+    >
+      <Icon size={22} />
+      <span>{label}</span>
+    </button>
+  );
 
-    // Devis
-    function addQuoteLine(){ quoteLines.push({ productId:'', qty:1, price:0 }); renderQuoteLines(); }
-    function removeQuoteLine(i){ quoteLines.splice(i,1); renderQuoteLines(); }
+  return (
+    <div className={`min-h-screen flex flex-col ${darkMode ? 'dark bg-slate-900 text-white' : 'bg-slate-50 text-slate-900'}`}>
+      {/* Top Mobile Nav */}
+      <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 h-16 flex items-center justify-between">
+        <button onClick={() => setSidebarOpen(true)} className="p-2 text-slate-600 dark:text-slate-300">
+          <Menu size={24} />
+        </button>
+        <span className="font-black tracking-tighter text-xl text-blue-600">GUIMETRA</span>
+        <button onClick={() => setDarkMode(!darkMode)} className="p-2 text-slate-600 dark:text-slate-300">
+          {darkMode ? <Sun size={22} /> : <Moon size={22} />}
+        </button>
+      </header>
 
-    function renderQuoteLines(){
-      const container = document.getElementById('quote_lines'); container.innerHTML = '';
-      quoteLines.forEach((l,i)=>{
-        const options = products.map(p=>`<option value="${p.id}" ${p.id===l.productId?'selected':''}>${escapeHtml(p.nom)}</option>`).join('');
-        const div = document.createElement('div'); div.className='d-flex gap-2 mb-2';
-        div.innerHTML = `<select class="form-select" id="ql_prod_${i}" style="flex:2"><option value="">-- produit --</option>${options}</select>
-                         <input class="form-control" id="ql_qty_${i}" style="max-width:110px" type="number" value="${l.qty}">
-                         <input class="form-control" id="ql_price_${i}" style="max-width:150px" value="${l.price}">
-                         <button class="btn btn-outline-danger" onclick="removeQuoteLine(${i})"><i class="fa fa-trash"></i></button>`;
-        container.appendChild(div);
-        document.getElementById(`ql_prod_${i}`).onchange = (e)=>{ const pid=e.target.value; const p=products.find(x=>x.id===pid); quoteLines[i].productId = pid; quoteLines[i].price = p ? (p.prixVente||0) : 0; renderQuoteLines(); };
-        document.getElementById(`ql_qty_${i}`).oninput = (e)=>{ quoteLines[i].qty = Number(e.target.value||0); renderQuotePreview(); };
-        document.getElementById(`ql_price_${i}`).oninput = (e)=>{ quoteLines[i].price = Number(e.target.value||0); renderQuotePreview(); };
-      });
-      renderQuotePreview();
-    }
+      {/* Sidebar Overlay for Mobile */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-50 flex">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
+          <aside className="relative w-72 bg-white dark:bg-slate-800 h-full p-6 shadow-2xl animate-in slide-in-from-left duration-300">
+            <div className="flex justify-between items-center mb-8">
+              <span className="font-black text-xl">Menu</span>
+              <button onClick={() => setSidebarOpen(false)}><X size={24}/></button>
+            </div>
+            <nav className="space-y-2">
+              <NavItem id="dashboard" icon={LayoutDashboard} label="Tableau de bord" />
+              <NavItem id="products" icon={Package} label="Stocks Matériaux" />
+              <NavItem id="clients" icon={Users} label="Clients & Projets" />
+              <NavItem id="quotes" icon={FileText} label="Factures & Devis" />
+              <NavItem id="settings" icon={Settings} label="Paramètres" />
+            </nav>
+          </aside>
+        </div>
+      )}
 
-    function renderQuotePreview(){
-      const preview = document.getElementById('quote_preview_content'); let html=''; let total=0;
-      quoteLines.forEach(l=>{
-        const p = products.find(x=>x.id===l.productId) || {};
-        const name = p.nom || '—';
-        const lineTotal = (Number(l.price)||0) * (Number(l.qty)||0);
-        total += lineTotal;
-        html += `<div class="d-flex justify-content-between"><div><b>${escapeHtml(name)}</b><div class="muted">${escapeHtml(p.code||'')}</div></div><div>${(Number(l.qty)||0)} × ${(Number(l.price)||0).toLocaleString()} = ${lineTotal.toLocaleString()} GNF</div></div><hr>`;
-      });
-      preview.innerHTML = html || '<div class="muted">Aucune ligne</div>';
-      document.getElementById('quote_total').innerText = total.toLocaleString();
-    }
+      {/* Content Area */}
+      <main className="flex-1 pb-20">
+        <div className="p-4 max-w-lg mx-auto space-y-6">
+          {activeTab === 'dashboard' && <DashboardView products={products} clients={clients} quotes={quotes} />}
+          {activeTab === 'products' && <ProductsView products={products} />}
+          {activeTab === 'clients' && <ClientsView clients={clients} />}
+          {activeTab === 'quotes' && <QuotesView quotes={quotes} products={products} clients={clients} />}
+        </div>
+      </main>
 
-    async function saveQuote(){
-      if(!auth.currentUser) return toast('Connecte-toi','error');
-      if(quoteLines.length===0) return toast('Ajoute au moins une ligne','error');
-      try{
-        // decrease stock where possible
-        for(const l of quoteLines){
-          if(!l.productId) continue;
-          const prod = products.find(p=>p.id===l.productId);
-          if(prod){
-            const newQty = Math.max(0, (Number(prod.quantite)||0) - Number(l.qty||0));
-            await db.collection('produits').doc(prod.id).update({ quantite: newQty, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
-          }
-        }
-        const total = quoteLines.reduce((s,l)=> s + ((Number(l.price)||0)*(Number(l.qty)||0)),0);
-        const profit = quoteLines.reduce((s,l)=>{ const p = products.find(x=>x.id===l.productId)||{}; return s + ( (Number(l.price)||0 - Number(p.prixAchat||0)) * (Number(l.qty)||0) ); },0);
-        const data = { clientId: document.getElementById('quote_client').value || null, ref: document.getElementById('quote_ref').value || '', lines: quoteLines, total, profit, createdAt: firebase.firestore.FieldValue.serverTimestamp() };
-        const ref = await db.collection('devis').add(data);
-        await logAction('create_quote', ref.id, data);
-        toast('Devis enregistré','success');
-        quoteLines = []; addQuoteLine(); renderQuoteLines(); renderCharts();
-      }catch(e){ console.error(e); toast(e.message,'error'); }
-    }
+      {/* Bottom Floating Action Button (Optional for quick access) */}
+      <div className="fixed bottom-6 right-6">
+        <button className="w-14 h-14 bg-blue-600 text-white rounded-full shadow-xl flex items-center justify-center active:scale-90 transition-transform">
+          <Plus size={28} />
+        </button>
+      </div>
+    </div>
+  );
+}
 
-    // Charts
-    let caChart=null, topChart=null;
-    function renderCharts(){
-      const months = Array.from({length:12}, (_,i)=> new Date(new Date().getFullYear(),i,1).toLocaleString('fr-FR',{month:'short'}));
-      const totals = new Array(12).fill(0);
-      quotes.forEach(q=>{
-        const d = q.createdAt && q.createdAt.seconds ? new Date(q.createdAt.seconds*1000) : new Date(q.createdAt||Date.now());
-        totals[d.getMonth()] += Number(q.total||0);
-      });
-      const ctx = document.getElementById('chartCA').getContext('2d');
-      if(caChart) caChart.destroy();
-      caChart = new Chart(ctx, { type:'bar', data:{ labels:months, datasets:[{ label:'GNF', data:totals, backgroundColor:'rgba(11,99,165,0.9)' }] }, options:{ plugins:{legend:{display:false}} } });
+// --- SUB-VIEWS (MOBILE OPTIMIZED) ---
 
-      const counts = {};
-      quotes.forEach(q=> (q.lines||[]).forEach(l=>{ if(l.productId) counts[l.productId] = (counts[l.productId]||0) + Number(l.qty||0); }));
-      const items = Object.keys(counts).map(id=>({ id, qty:counts[id], name:(products.find(p=>p.id===id)||{}).nom||'Produit'})).sort((a,b)=>b.qty-a.qty).slice(0,6);
-      const topLabels = items.map(i=>i.name); const topData = items.map(i=>i.qty);
-      const ctx2 = document.getElementById('chartTop').getContext('2d');
-      if(topChart) topChart.destroy();
-      topChart = new Chart(ctx2, { type:'doughnut', data:{ labels:topLabels, datasets:[{ data:topData, backgroundColor:['#0b63a5','#e63946','#2d6a4f','#ffa94d','#6c5ce7','#00b894'] }] } });
-      document.getElementById('stat_prod').innerText = products.length;
-      document.getElementById('stat_clients').innerText = clients.length;
-      document.getElementById('stat_devis').innerText = quotes.reduce((s,q)=>s+Number(q.total||0),0).toLocaleString();
-    }
+function DashboardView({ products, clients, quotes }) {
+  const stats = [
+    { label: "Chiffre d'Affaires", val: quotes.reduce((a,b)=>a+b.total,0), unit: "GNF", color: "blue", icon: FileText },
+    { label: "Stock Valeur", val: products.reduce((a,b)=>a+(b.sellPrice*b.qty),0), unit: "GNF", color: "orange", icon: Package },
+    { label: "Clients Actifs", val: clients.length, unit: "Fiches", color: "green", icon: Users },
+  ];
 
-    // Low stock
-    function showLowStock(){
-      const low = products.filter(p=> Number(p.quantite||0) <= (p.seuil||5));
-      const area = document.getElementById('lowStockArea');
-      if(!low || low.length===0) { area.innerHTML=''; return; }
-      area.innerHTML = `<div class="small-muted">Stock faible: ${low.map(p=>escapeHtml(p.nom)+' ('+p.quantite+')').join(' • ')}</div>`;
-    }
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col gap-1">
+        <h2 className="text-2xl font-black">Bonjour, Aliou</h2>
+        <p className="text-slate-400 font-bold text-xs uppercase">Résumé de l'activité aujourd'hui</p>
+      </div>
+      
+      <div className="grid grid-cols-1 gap-4">
+        {stats.map((s, i) => (
+          <Card key={i} className="flex items-center gap-4">
+            <div className={`w-12 h-12 rounded-xl bg-${s.color}-100 dark:bg-${s.color}-900/30 flex items-center justify-center text-${s.color}-600`}>
+              <s.icon size={24} />
+            </div>
+            <div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">{s.label}</p>
+              <p className="text-xl font-black font-mono">{s.val.toLocaleString()} <span className="text-xs">{s.unit}</span></p>
+            </div>
+          </Card>
+        ))}
+      </div>
 
-    // Convertisseur & export utilities
-    async function convertCurrency(){
-      const amount = Number(document.getElementById('conv_amount').value||0);
-      const from = document.getElementById('conv_from').value; const to = document.getElementById('conv_to').value;
-      if(!amount){ toast('Saisis un montant','error'); return; }
-      try{
-        const res = await fetch(`https://api.exchangerate.host/convert?from=${from}&to=${to}&amount=${amount}`);
-        const d = await res.json();
-        if(d && d.result!=null){ document.getElementById('conv_result').innerText = `${Number(d.result).toLocaleString()} ${to}`; if(auth.currentUser) await db.collection('conversions').add({ montant:amount, from, to, resultat:d.result, mode:'api', ts: firebase.firestore.FieldValue.serverTimestamp(), uid: auth.currentUser.uid }); return; }
-        throw new Error('no result');
-      }catch(e){
-        const manual = Number(document.getElementById('manual_rate').value||0);
-        if(manual){ const out = amount * manual; document.getElementById('conv_result').innerText = `${out.toLocaleString()} ${to} (manuel)`; if(auth.currentUser) await db.collection('conversions').add({ montant:amount, from, to, resultat:out, mode:'manuel', ts: firebase.firestore.FieldValue.serverTimestamp(), uid: auth.currentUser.uid }); return; }
-        document.getElementById('conv_result').innerText = 'Conversion impossible';
-      }
-    }
+      <div className="pt-4 space-y-4">
+        <h3 className="font-black text-sm uppercase text-slate-400">Alertes Stock Bas</h3>
+        {products.filter(p => p.qty < 5).map(p => (
+          <div key={p.id} className="flex items-center justify-between p-4 bg-red-50 dark:bg-red-900/20 rounded-2xl border border-red-100 dark:border-red-900/30">
+            <span className="font-bold text-sm">{p.name}</span>
+            <Badge color="red">{p.qty} RESTANTS</Badge>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-    // Export / Import / Clear
-    async function exportQuotesCSV(){
-      const snap = await db.collection('devis').orderBy('createdAt','desc').get();
-      const rows = [['id','client','ref','total','profit','date']];
-      snap.docs.forEach(d=>{ const q = d.data(); rows.push([d.id, q.clientId||'', q.ref||'', q.total||'', q.profit||'', (q.createdAt && q.createdAt.seconds) ? new Date(q.createdAt.seconds*1000).toLocaleString() : '']); });
-      const csv = rows.map(r=> r.map(c=>`"${String(c||'').replace(/"/g,'""')}"`).join(',')).join('\n');
-      const blob = new Blob([csv],{type:'text/csv'}); const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='devis.csv'; a.click(); URL.revokeObjectURL(url);
-    }
+function ProductsView({ products }) {
+  const [search, setSearch] = useState("");
+  const filtered = products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
 
-    function exportAllJSON(){
-      // download snapshot via client side (note: won't include server timestamps)
-      db.collection('produits').get().then(snapP=>{
-        db.collection('clients').get().then(snapC=>{
-          db.collection('devis').get().then(snapQ=>{
-            const data = { products: snapP.docs.map(d=>({id:d.id, ...d.data()})), clients: snapC.docs.map(d=>({id:d.id, ...d.data()})), quotes: snapQ.docs.map(d=>({id:d.id, ...d.data()})) };
-            const blob = new Blob([JSON.stringify(data,null,2)],{type:'application/json'}); const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`guimetra-export-${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
-          });
-        });
-      });
-    }
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-black">Stocks</h2>
+        <Badge color="blue">{products.length} articles</Badge>
+      </div>
+      
+      <div className="relative">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+        <input 
+          className="w-full bg-white dark:bg-slate-800 p-4 pl-12 rounded-2xl border border-slate-200 dark:border-slate-700 font-bold outline-none focus:ring-2 focus:ring-blue-500" 
+          placeholder="Rechercher un matériel..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+      </div>
 
-    async function importJSONPrompt(){
-      const input = document.createElement('input'); input.type='file'; input.accept='application/json';
-      input.onchange = e=> {
-        const f = e.target.files[0]; if(!f) return;
-        const reader = new FileReader(); reader.onload = async ()=> {
-          try{
-            const obj = JSON.parse(reader.result);
-            if(!confirm('Importer JSON vers Firestore ? (écrasera/ajoutera des documents)')) return;
-            // add products/clients/devis
-            for(const p of (obj.products||[])){ await db.collection('produits').add(p); }
-            for(const c of (obj.clients||[])){ await db.collection('clients').add(c); }
-            for(const q of (obj.quotes||[])){ await db.collection('devis').add(q); }
-            toast('Import lancé (opérations en cours)','success',4000);
-          }catch(err){ toast('JSON invalide','error'); }
-        }; reader.readAsText(f);
-      };
-      input.click();
-    }
+      <div className="space-y-3">
+        {filtered.map(p => (
+          <Card key={p.id} className="flex justify-between items-center py-4">
+            <div className="space-y-1">
+              <p className="font-black text-sm uppercase">{p.name}</p>
+              <p className="text-xs font-mono font-bold text-blue-600">{p.sellPrice.toLocaleString()} GNF / unité</p>
+            </div>
+            <div className="text-right">
+              <p className="text-lg font-black">{p.qty}</p>
+              <p className="text-[9px] font-black text-slate-400 uppercase">En stock</p>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-    async function clearAllData(){
-      if(!confirm('Vider collections (produits, clients, devis) ? (IRREVERSIBLE)')) return;
-      if(!auth.currentUser) return toast('Connecte-toi','error');
-      const colls = ['produits','clients','devis','conversions','audit_logs'];
-      for(const c of colls){
-        const snap = await db.collection(c).limit(500).get();
-        const batch = db.batch();
-        snap.docs.forEach(d=> batch.delete(d.ref));
-        await batch.commit();
-      }
-      toast('Collections vidées','success');
-    }
+function ClientsView({ clients }) {
+  return (
+    <div className="space-y-4">
+      <h2 className="text-2xl font-black">Clients</h2>
+      <div className="grid grid-cols-1 gap-3">
+        {clients.map(c => (
+          <Card key={c.id} className="flex items-center justify-between group">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-black text-sm">
+                {c.name.charAt(0)}
+              </div>
+              <div>
+                <p className="font-bold">{c.name}</p>
+                <p className="text-xs text-slate-400 font-bold">{c.phone}</p>
+              </div>
+            </div>
+            <button className="p-2 text-slate-300 group-active:text-blue-600">
+              <ChevronRight size={20} />
+            </button>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-    // Helpers
-    function escapeHtml(s=''){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-    function updateStats(){ document.getElementById('stat_prod').innerText = products.length; document.getElementById('stat_clients').innerText = clients.length; document.getElementById('stat_devis').innerText = quotes.reduce((s,q)=>s+Number(q.total||0),0).toLocaleString(); }
-
-    // render logs area
-    function renderLogs(){
-      const el = document.getElementById('authMessage');
-      el.innerHTML = logs.slice(0,5).map(l=>`<div class="small-muted">${new Date((l.ts && l.ts.seconds) ? l.ts.seconds*1000 : Date.now()).toLocaleString()} — ${escapeHtml(l.action || '')}</div>`).join('');
-    }
-
-    // Auth watch: show/hide UI and start listeners
-    auth.onAuthStateChanged(user=>{
-      if(user){
-        document.getElementById('userBox').innerText = user.isAnonymous ? 'Invité' : (user.email || 'Utilisateur');
-        document.getElementById('signOutBtn').style.display = 'inline-block';
-        // show main sections
-        document.getElementById('dashboard').style.display='block';
-        document.getElementById('produits').style.display='none';
-        document.getElementById('clients').style.display='none';
-        document.getElementById('devis').style.display='none';
-        document.getElementById('convertisseur').style.display='none';
-        document.getElementById('settings').style.display='none';
-        document.getElementById('authMessage').style.display='none';
-        startRealtimeListeners();
-      } else {
-        // hide main and show auth message
-        document.getElementById('userBox').innerHTML = `<button class="btn btn-sm btn-light" onclick="new bootstrap.Modal(document.getElementById('authModal')).show()">Se connecter</button>`;
-        document.getElementById('signOutBtn').style.display='none';
-        document.getElementById('dashboard').style.display='none';
-        document.getElementById('produits').style.display='none';
-        document.getElementById('clients').style.display='none';
-        document.getElementById('devis').style.display='none';
-        document.getElementById('convertisseur').style.display='none';
-        document.getElementById('settings').style.display='none';
-        document.getElementById('authMessage').style.display='block';
-      }
-    });
-
-    // Init UI
-    document.addEventListener('DOMContentLoaded', ()=>{
-      document.querySelector('.nav-btn[data-target="dashboard"]').click();
-      quoteLines = []; addQuoteLine();
-    });
-  </script>
-</body>
-</html>
+function QuotesView({ quotes }) {
+  return (
+    <div className="space-y-4">
+      <h2 className="text-2xl font-black">Facturation</h2>
+      <div className="space-y-3">
+        {quotes.map(q => (
+          <Card key={q.id} className="border-l-4 border-blue-600">
+            <div className="flex justify-between items-start mb-2">
+              <span className="text-[10px] font-black font-mono text-slate-400 uppercase">#{q.id.substring(0,8)}</span>
+              <Badge color="green">Payé</Badge>
+            </div>
+            <p className="font-black text-lg">{q.clientName}</p>
+            <div className="flex justify-between items-end mt-4">
+              <div className="text-[10px] text-slate-400 font-bold uppercase">
+                {q.items?.length || 0} articles
+              </div>
+              <p className="text-xl font-black font-mono text-blue-600">{q.total.toLocaleString()} GNF</p>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
